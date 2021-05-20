@@ -74,7 +74,7 @@ def f_df_multi_shots(s, data_list, geometry, model, space_order):
 def get_true_model(shape, spacing, origin, nbl, space_order, **kwargs):
     ''' Read Vp file and set to Model object. (km/s)
     '''
-    data_path = "data/vel.bin"
+    data_path = "data/MODEL_P-WAVE_VELOCITY.bin"
     vp = 1e-3 * np.fromfile(data_path, dtype='float32', sep="")
     vp = vp.reshape(shape)
     return Model(space_order=space_order, vp=vp, origin=origin, shape=shape,
@@ -84,7 +84,7 @@ def get_smooth_model(shape, spacing, origin, nbl, space_order, **kwargs):
     ''' Read Vp file apply smoothing filter and set it to Model 
         object. (km/s)
     '''
-    data_path = "data/vel.bin"
+    data_path = "data/MODEL_P-WAVE_VELOCITY.bin"
     vp = 1e-3 * np.fromfile(data_path, dtype='float32', sep="")
     vp = vp.reshape(shape)
     v0 = scipy.ndimage.gaussian_filter(vp, sigma=10)    

@@ -1,8 +1,17 @@
 """
-Author: Jascha Sohl-Dickstein (2014)
-This software is made available under the Creative Commons
-Attribution-Noncommercial License.
-( http://creativecommons.org/licenses/by-nc/3.0/ )
+Copyright 2014 Jascha Sohl-Dickstein
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 """
 
 #from __future__ import print_function
@@ -215,13 +224,6 @@ class SFO(object):
             if self.display > 1:
                 print("pass {0}, step {1},".format(float(self.eval_count_total)/self.N, i)),
             self.optimization_step()
-            
-            # Write inverted reflectivity to disk    
-            name = 'dvel'+str(i)+'.bin'
-            file = open(name, "wb")
-            scopy = self.theta_flat_to_original(self.theta).astype(np.float32).copy(order='C')
-            file.write(scopy)  
-
             if self.display > 1:
                 print("active {0}/{1}, sfo time {2} s, func time {3} s, f {4}, <f> {5}".format(np.sum(self.active), self.active.shape[0], self.time_pass - self.time_func, self.time_func, self.hist_f_flat[-1], np.mean(self.hist_f[self.eval_count>0,0])))
         if num_steps < 1:
@@ -1102,7 +1104,6 @@ class SFO(object):
         # update theta to the new location
         self.theta += dtheta
         self.theta_proj += dtheta_proj
-        
         # the predicted improvement from this update step
         self.f_predicted_total_improvement = 0.5 * np.dot(dtheta_proj.T, np.dot(full_H_combined, dtheta_proj))
 
