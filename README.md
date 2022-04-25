@@ -32,7 +32,7 @@ pip install -U ray
 
 ```
 
-## Least-sqaures reverse time migration (LSRTM)
+## Least-squares reverse time migration (LSRTM)
 
 To provide subsurface images with better balanced amplitudes, higher resolution and fewer artifacts than standard migration, a least-sqaures migration should be considered. The LSRTM process involves, several wavefield computations of the Born modeling and its adjoint. To calculate these operators, I choose to use the `AcousticWaveSolver` Class from the Devito's folder `examples` or a Devito `Operator`, although it is also available on Devito, the operators needed to calculate the LSRTM in a medium with TTI anisotropy. In the script available [here](https://github.com/fffarias/sfo-manuscript/blob/main/lsm.py), there are all the necessary steps to perform the LSRTM, since besides performing the forward linearized modeling and its adjoint, some previous actions need to be defined, such as creating the object that contains the velocity model and the acquisition geometry, for example. All these steps in different contexts are also explored in the [tutorials available](https://github.com/devitocodes/devito/tree/master/examples/seismic/tutorials) on the Devito section. Thus, the sequence adopted in the main function involves:
 
