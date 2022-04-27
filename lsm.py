@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from sfo import SFO
 
 
-ray.init(num_cpus=20)
+ray.init()
 
 # Serial FWI objective function
 @ray.remote(num_returns=2)
@@ -57,11 +57,13 @@ def f_df_multi_shots(s, data_list, geometry, model, space_order):
     nsrc_batch = len(data_list[1])
     d_obs = data_list[0].reshape((geometry.nt,geometry.nrec,nsrc_batch))
     
+    # Prepare ray remote
     future = []
     for i in range(nsrc_batch):        
         args = [s, d_obs[:,:,i], data_list[1][i], geometry, model, space_order]                
         future.append(f_df_single_shot.remote(*args))
 
+    # Ray execution
     fval = 0.0
     grad = np.zeros(model.shape[0]*model.shape[1])
     for i in range(nsrc_batch):
@@ -71,20 +73,24 @@ def f_df_multi_shots(s, data_list, geometry, model, space_order):
     
     return fval, grad.flatten()
 
+# True velocity model is used to compute the true reflectivity
 def get_true_model(shape, spacing, origin, nbl, space_order, **kwargs):
     ''' Read Vp file and set to Model object. (km/s)
     '''
     data_path = "data/MODEL_P-WAVE_VELOCITY.bin"
+    # devito expects velocity to have km/s as units
     vp = 1e-3 * np.fromfile(data_path, dtype='float32', sep="")
     vp = vp.reshape(shape)
     return Model(space_order=space_order, vp=vp, origin=origin, shape=shape,
                  dtype=np.float32, spacing=spacing, nbl=nbl, bcs="damp")
 
+# Background velocity. Every propagation is run using this velocity
 def get_smooth_model(shape, spacing, origin, nbl, space_order, **kwargs):
     ''' Read Vp file apply smoothing filter and set it to Model 
         object. (km/s)
     '''
     data_path = "data/MODEL_P-WAVE_VELOCITY.bin"
+    # devito expects velocity to have km/s as units
     vp = 1e-3 * np.fromfile(data_path, dtype='float32', sep="")
     vp = vp.reshape(shape)
     v0 = scipy.ndimage.gaussian_filter(vp, sigma=10)    
@@ -92,25 +98,27 @@ def get_smooth_model(shape, spacing, origin, nbl, space_order, **kwargs):
     return Model(space_order=space_order, vp=v0, origin=origin, shape=shape,
                  dtype=np.float32, spacing=spacing, nbl=nbl, bcs="damp")
 
+# configure acquisition geometry
 def set_geometry(model, nsrc, nrec, f0, tn, t0=0):  
 
+    # Define acquisition geometry: sources
     # First, position source centrally in all dimensions, then set depth
     src_coordinates = np.empty((nsrc, 2))
     src_coordinates[:, 0] = np.linspace(0, model.domain_size[0], num=nsrc)
     src_coordinates[:, 1] = 20.  # Depth is 20m
 
     # Define acquisition geometry: receivers
-
     # Initialize receivers for synthetic and imaging data
     rec_coordinates = np.empty((nrec, 2))
     rec_coordinates[:, 0] = np.linspace(0, model.domain_size[0], num=nrec)
     rec_coordinates[:, 1] = 20.
 
-    # Geometry
+    # Geometry. Total simulation time, frequency and source type.
     geometry = AcquisitionGeometry(model, rec_coordinates, src_coordinates, t0, tn, f0=f0, src_type='Ricker')
 
     return geometry
 
+# serial forward modeling. This function is used to compute the "observed data"
 @ray.remote
 def forward_modeling(dm, isrc, model, geometry, space_order):
     geometry_i = AcquisitionGeometry(model, geometry.rec_positions, geometry.src_positions[isrc,:],
@@ -120,6 +128,7 @@ def forward_modeling(dm, isrc, model, geometry, space_order):
     
     return (d_obs.resample(geometry.dt).data[:][0:geometry.nt, :]).flatten()
 
+# Selects shots within all the possible ones, according to the batch size
 def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
     assert inputs.shape[0] == targets.shape[1]    
     if shuffle:
@@ -132,7 +141,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
             excerpt = slice(start_idx, start_idx + batchsize)                
         yield inputs[excerpt], targets[:,excerpt]
 
-# Write subfunctions as list
+# Write subfunctions as list. 
 def set_subreferences(dobs, geometry, batch_size):
     
     sub_refs = []
@@ -142,6 +151,7 @@ def set_subreferences(dobs, geometry, batch_size):
 
     return sub_refs
 
+# LSRTM steps
 def main(shape, spacing, origin, nbl, space_order,
          xs, xr, tn, f0, npasses, batch_size, **kwargs):    
 
@@ -164,8 +174,7 @@ def main(shape, spacing, origin, nbl, space_order,
     futures = []
     for i in range(geometry0.nsrc):
         args = [dm, i, smooth_model, geometry0, space_order]
-        futures.append(forward_modeling.remote(*args))
-    
+        futures.append(forward_modeling.remote(*args))    
     dobs = np.zeros((geometry0.nt*geometry0.nrec,geometry0.nsrc),dtype=np.float32)    
     for i in range(geometry0.nsrc):
         dobs[:,i] = ray.get(futures[i])  
@@ -187,6 +196,7 @@ def main(shape, spacing, origin, nbl, space_order,
     scopy = theta.reshape(smooth_model.shape).astype(np.float32).copy(order='C')
     file.write(scopy)  
     
+    # Create a plot with the minibatch function values
     plt.plot(np.array(optimizer.hist_f_flat))
     plt.xlabel('Iteration')
     plt.ylabel('Minibatch Function Value')
